@@ -1,0 +1,110 @@
+imagePullSecrets: []
+
+api:
+  replicaCount: 2
+  image:
+    repository: registry.example.invalid/enterprise-qa-api
+    tag: "0.7.0-s7"
+    digest: ""
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 1000m, memory: 1Gi}
+
+worker:
+  replicaCount: 1
+  image:
+    repository: registry.example.invalid/enterprise-qa-worker
+    tag: "0.7.0-s7"
+    digest: ""
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+web:
+  replicaCount: 2
+  image:
+    repository: registry.example.invalid/enterprise-qa-web
+    tag: "0.7.0-s7"
+    digest: ""
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+config:
+  appEnv: production
+  logLevel: INFO
+  oidcIssuer: https://idp.example.invalid/
+  oidcAudience: enterprise-qa-api
+  oidcJwksUrl: https://idp.example.invalid/.well-known/jwks.json
+  oidcAuthorizationUrl: https://idp.example.invalid/authorize
+  oidcTokenUrl: https://idp.example.invalid/token
+  oidcClientId: enterprise-qa-web
+  webPublicUrl: https://qa.example.invalid
+  apiInternalUrl: http://enterprise-qa-api:8000
+  modelProviderEnabled: true
+  modelProviderBaseUrl: https://approved-model-gateway.example.invalid/v1
+  modelProviderModel: approved-chat-model
+  modelConnectTimeoutSeconds: 5
+  modelFirstTokenTimeoutSeconds: 10
+  modelTotalTimeoutSeconds: 60
+  modelMaxAttempts: 3
+  modelMaxConcurrency: 8
+  chatRequestsPerMinute: 30
+  chatTenantConcurrency: 8
+  chatUserConcurrency: 2
+  chatMaxInputTokens: 4096
+  chatMaxOutputTokens: 1024
+  objectStoreBackend: s3
+  objectStoreEndpointUrl: https://s3.internal.example.invalid
+  objectStorePublicEndpointUrl: https://uploads.example.invalid
+  objectStoreRegion: us-east-1
+  objectStoreQuarantineBucket: enterprise-qa-quarantine
+  objectStorePublishedBucket: enterprise-qa-published
+  uploadPresignSeconds: 900
+  ingestionMaxUploadBytes: 10485760
+  ingestionMaxAttempts: 3
+  ingestionJobLeaseSeconds: 120
+  ingestionWorkerPollSeconds: 1
+  malwareScannerBackend: clamav
+  clamavHost: clamav.security.svc.cluster.local
+  clamavPort: 3310
+  clamavTimeoutSeconds: 15
+  chunkMaxTokens: 256
+  chunkOverlapTokens: 32
+  embeddingProviderEnabled: true
+  embeddingProviderBaseUrl: https://approved-model-gateway.example.invalid/v1
+  embeddingProviderModel: approved-embedding-model
+  embeddingDimensions: 1536
+  ragEnabled: true
+  retrievalVectorCandidates: 40
+  retrievalLexicalCandidates: 40
+  retrievalRerankCandidates: 20
+  retrievalFinalK: 6
+  retrievalRrfK: 60
+  retrievalContextMaxTokens: 1600
+  retrievalMinRelevance: 0.35
+  retrievalMinQueryCoverage: 0.35
+  citationMaxQuoteChars: 1200
+  rerankerProviderEnabled: true
+  rerankerProviderBaseUrl: https://approved-model-gateway.example.invalid/v1
+  rerankerProviderModel: approved-reranker-model
+  rerankerTimeoutSeconds: 20
+  telemetryExportEnabled: true
+  otelExporterOtlpEndpoint: http://otel-collector.observability.svc.cluster.local:4317
+  otelServiceName: enterprise-qa-api
+  releaseRevision: 0.7.0-s7
+  telemetryMetricExportIntervalMs: 10000
+
+externalSecrets:
+  secretName: enterprise-qa-runtime
+  databaseUrlKey: database-url
+  cursorSigningKeyKey: cursor-signing-key
+  modelApiKeyKey: model-api-key
+  objectStoreAccessKeyKey: object-store-access-key
+  objectStoreSecretKeyKey: object-store-secret-key
+  embeddingApiKeyKey: embedding-api-key
+  rerankerApiKeyKey: reranker-api-key
+
+serviceAccount:
+  create: true
+  name: ""

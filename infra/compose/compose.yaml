@@ -1,0 +1,245 @@
+name: enterprise-qa
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    networks: [backend]
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${QA_WEB_PUBLIC_URL:-http://127.0.0.1:3000}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    # The browser uses the public presigned endpoint. Attach MinIO to a
+    # non-internal network so Docker Desktop can publish 9000/9001 locally.
+    networks: [frontend, backend]
+
+  fake-idp:
+    build:
+      context: ../..
+      dockerfile: apps/fake-idp/Dockerfile
+    environment:
+      FAKE_OIDC_ISSUER: ${QA_OIDC_ISSUER:?set QA_OIDC_ISSUER in .env}
+      FAKE_OIDC_AUDIENCE: ${QA_OIDC_AUDIENCE:?set QA_OIDC_AUDIENCE in .env}
+      FAKE_OIDC_CLIENT_ID: ${QA_OIDC_CLIENT_ID:-enterprise-qa-web}
+      FAKE_OIDC_REDIRECT_URI: ${QA_WEB_PUBLIC_URL:-http://127.0.0.1:3000}/api/auth/callback
+    ports:
+      - "127.0.0.1:9002:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health/live')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [frontend, backend]
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    environment: &api_environment
+      QA_APP_ENV: local
+      QA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      QA_AUTO_CREATE_SCHEMA: "false"
+      QA_SEED_DEMO_DATA: "false"
+      QA_DEV_AUTH_ENABLED: "true"
+      QA_OIDC_ISSUER: ${QA_OIDC_ISSUER:?set QA_OIDC_ISSUER in .env}
+      QA_OIDC_AUDIENCE: ${QA_OIDC_AUDIENCE:?set QA_OIDC_AUDIENCE in .env}
+      QA_OIDC_JWKS_URL: http://fake-idp:9000/jwks
+      QA_DEV_JWT_SECRET: ${QA_DEV_JWT_SECRET:?set QA_DEV_JWT_SECRET in .env}
+      QA_CURSOR_SIGNING_KEY: ${QA_CURSOR_SIGNING_KEY:?set QA_CURSOR_SIGNING_KEY in .env}
+      QA_FAKE_MODEL_ENABLED: "true"
+      QA_MODEL_PROVIDER_ENABLED: "false"
+      QA_MODEL_MAX_ATTEMPTS: "3"
+      QA_MODEL_MAX_CONCURRENCY: "8"
+      QA_CHAT_REQUESTS_PER_MINUTE: "30"
+      QA_CHAT_TENANT_CONCURRENCY: "8"
+      QA_CHAT_USER_CONCURRENCY: "2"
+      QA_OBJECT_STORE_BACKEND: s3
+      QA_OBJECT_STORE_ENDPOINT_URL: http://minio:9000
+      QA_OBJECT_STORE_PUBLIC_ENDPOINT_URL: http://127.0.0.1:9000
+      QA_OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      QA_OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      QA_OBJECT_STORE_QUARANTINE_BUCKET: qa-quarantine
+      QA_OBJECT_STORE_PUBLISHED_BUCKET: qa-published
+      QA_OBJECT_STORE_AUTO_CREATE_BUCKETS: "true"
+      QA_MALWARE_SCANNER_BACKEND: signature
+      QA_FAKE_EMBEDDING_ENABLED: "true"
+      QA_EMBEDDING_PROVIDER_ENABLED: "false"
+      QA_EMBEDDING_DIMENSIONS: "16"
+      QA_RAG_ENABLED: "true"
+      QA_RETRIEVAL_VECTOR_CANDIDATES: "20"
+      QA_RETRIEVAL_LEXICAL_CANDIDATES: "20"
+      QA_RETRIEVAL_RERANK_CANDIDATES: "12"
+      QA_RETRIEVAL_FINAL_K: "5"
+      QA_RETRIEVAL_RRF_K: "60"
+      QA_RETRIEVAL_CONTEXT_MAX_TOKENS: "1200"
+      QA_RETRIEVAL_MIN_RELEVANCE: "0.28"
+      QA_RETRIEVAL_MIN_QUERY_COVERAGE: "0.34"
+      QA_CITATION_MAX_QUOTE_CHARS: "1200"
+      QA_FAKE_RERANKER_ENABLED: "true"
+      QA_RERANKER_PROVIDER_ENABLED: "false"
+      QA_RERANKER_TIMEOUT_SECONDS: "20"
+      QA_LOCAL_GOVERNANCE_EVALUATOR_ENABLED: "true"
+      QA_LOCAL_QUALITY_EVALUATOR_ENABLED: "true"
+      QA_LOCAL_RELEASE_ORCHESTRATOR_ENABLED: "true"
+      QA_TELEMETRY_EXPORT_ENABLED: "true"
+      QA_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      QA_OTEL_SERVICE_NAME: enterprise-qa-api
+      QA_RELEASE_REVISION: s7-local-compose
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *api_environment
+      QA_SEED_DEMO_DATA: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      fake-idp:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${QA_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # Keep backend service discovery while allowing the documented local
+    # 127.0.0.1:8000 developer endpoint to be published by Docker Desktop.
+    networks: [frontend, backend]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      <<: *api_environment
+      QA_SEED_DEMO_DATA: "false"
+      QA_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    networks: [backend]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      QA_API_INTERNAL_URL: http://api:8000
+      QA_WEB_PUBLIC_URL: ${QA_WEB_PUBLIC_URL:-http://127.0.0.1:3000}
+      QA_OIDC_AUTHORIZATION_URL: ${QA_OIDC_ISSUER}authorize
+      QA_OIDC_TOKEN_URL_INTERNAL: http://fake-idp:9000/token
+      QA_OIDC_CLIENT_ID: ${QA_OIDC_CLIENT_ID:-enterprise-qa-web}
+      QA_OIDC_DEV_PERSONA: demo
+      QA_COOKIE_SECURE: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${QA_WEB_PORT:-3000}:3000"
+    networks: [frontend, backend]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+    networks: [frontend, backend]
+
+  prometheus:
+    image: prom/prometheus:v3.10.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ../observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ../observability/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - prometheus_data:/prometheus
+    depends_on: [otel-collector]
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [frontend, backend]
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on: [prometheus]
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [frontend, backend]
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  frontend:
+  backend:
+    internal: true
