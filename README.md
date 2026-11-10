@@ -2,38 +2,38 @@
 
 By Zichun Ai, MSc Internet of Things with AI, University of Bristol
 
-A chatbot for a company's internal documents. Ask it something like "How do I claim travel expenses?" or "Why can't I connect to the VPN?", and it will:
+It's a chatbot for a company's internal documents, so you can ask it things like "How do I claim travel expenses?" or "Why can't I connect to the VPN?".
 
-- answer **only from documents you are allowed to see**,
-- show **which document the answer came from**, and
-- say **"I don't know"** when the documents don't cover the question.
+- It only answers from documents you're allowed to see.
+- It shows you which document the answer came from.
+- It says "I don't know" when the documents don't cover the question.
 
-This is a personal project. It connects with my Java full-stack internship (Apr–Aug 2025), where I learned how the front end and back end of a business system work together.
+This is a personal project, and it ties in with my Java full-stack internship (Apr–Aug 2025), where I learned how the front end and back end of a business system work together.
 
 ## How it works
 
-1. **Upload documents** in PDF, Word, Markdown or plain text. They are checked and split into short passages.
-2. **Ask a question.** The system looks for matching passages by keyword and by meaning, and only searches what you have permission to read.
-3. **Get an answer.** The AI model writes it from those passages, word by word, and lists its sources.
-4. **Or get a polite "I don't know"** if the evidence is too weak.
+1. You upload documents in PDF, Word, Markdown or plain text, and it checks them and splits them into short passages.
+2. You ask a question, and it looks for matching passages by keyword and by meaning, but only in what you're allowed to read.
+3. The AI model writes the answer from those passages, word by word, and lists its sources.
+4. If the evidence is too weak, you get a polite "I don't know".
 
 ## What else it has
 
-- An admin page for who can see what, and for usage limits
-- An activity log that shows if anyone has tampered with it
-- Support for different AI model providers, without changing the rest of the system
-- Automatic quality checks before a new version goes out, then a gradual roll-out that can stop and roll back by itself
+- There's an admin page for who can see what and for usage limits.
+- The activity log shows if anyone has tampered with it.
+- You can switch AI model providers without changing the rest of the system.
+- New versions go through automatic quality checks, then a gradual roll-out that can stop and roll back by itself.
 
 I built it step by step in eight stages, from planning through to a practice release.
 
 ## How it was tested
 
-- 76 automated tests plus 35 sub-tests, covering about 89% of the code
-- A 20-question check of answers, sources, refusals and permission leaks, which it passes with no leaks
+- There are 76 automated tests plus 35 sub-tests, covering about 89% of the code.
+- It passes a 20-question check of answers, sources, refusals and permission leaks, with no leaks.
 
 ## Good to know
 
-All of this testing used made-up documents and a stand-in for the AI model. It shows the system works as designed, but not yet how good a real AI model's answers would be. One setting was also adjusted using those same 20 questions, so the score isn't a real-world estimate. So far it has only run on my own computer.
+All of this testing used made-up documents and a stand-in for the AI model, so it shows the system works as designed but not how good a real AI model's answers would be. I also adjusted one setting using those same 20 questions, so the score isn't a real-world estimate. So far it's only run on my own computer.
 
 ## Built with
 
